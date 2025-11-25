@@ -45,7 +45,8 @@ class CANPS4Bridge(Node):
         self.pub_stream = self.create_publisher(Float32MultiArray, '/stream_cmd', 10)
 
         self.get_logger().info("Nodo CAN-PS4 iniciado ✔ (con lógica de movimiento)")
-
+        self.last_share = 0
+        
     def ps4_callback(self, msg):
         data = msg.data
 
@@ -85,11 +86,17 @@ class CANPS4Bridge(Node):
         # ================================
         # PUBLICAR COMANDO DE STREAMING
         # ================================
-        if share == 1 and self.last_share == 0:
+        if Share == 1 and self.last_share == 0:
+            # flanco ascendente
             cmd = Float32MultiArray()
-            cmd.data = [1]     # Toggle
+            cmd.data = [1.0]     # float
             self.pub_stream.publish(cmd)
+            self.last_share = 1
             print("SHARE pressed → TOGGLE STREAM")
+
+        elif Share == 0:
+            # reset del estado
+            self.last_share = 0
 
         # ================================
         # LOGICA DE MOVIMIENTO
