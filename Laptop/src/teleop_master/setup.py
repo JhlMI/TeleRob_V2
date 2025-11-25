@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'teleop_ps4 = teleop_master.teleop_ps4_multiarray:main',
         ],
     },
 )

@@ -42,6 +42,7 @@ class CANPS4Bridge(Node):
 
         # Recibe TODOS los datos del mando PS4
         self.create_subscription(Float32MultiArray, '/Data_PS4', self.ps4_callback, 10)
+        self.pub_stream = self.create_publisher(Float32MultiArray, '/stream_cmd', 10)
 
         self.get_logger().info("Nodo CAN-PS4 iniciado ✔ (con lógica de movimiento)")
 
@@ -80,6 +81,15 @@ class CANPS4Bridge(Node):
         DOWN    = data[18]
         LEFT    = data[19]
         RIGHT   = data[20] if len(data) > 20 else 0
+        
+        # ================================
+        # PUBLICAR COMANDO DE STREAMING
+        # ================================
+        if share == 1 and self.last_share == 0:
+            cmd = Float32MultiArray()
+            cmd.data = [1]     # Toggle
+            self.pub_stream.publish(cmd)
+            print("SHARE pressed → TOGGLE STREAM")
 
         # ================================
         # LOGICA DE MOVIMIENTO

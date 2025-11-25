@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'video_tx = robot_video_tx.video_tx:main',
         ],
     },
 )
