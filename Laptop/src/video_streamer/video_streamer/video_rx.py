@@ -1,72 +1,132 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+
 import cv2
-from cv_bridge import CvBridge
-from sensor_msgs.msg import Image
+import numpy as np
 import time
+import threading
 
 
-class CameraReceiver(Node):
+class VideoReceiver(Node):
     def __init__(self):
-        super().__init__('camera_receiver')
+        super().__init__("video_receiver")
 
-        self.pub = self.create_publisher(Image, '/camera/image_raw', 10)
-        self.bridge = CvBridge()
+        print(">>> Nodo ROS2 creado")
 
-        # Pipeline GStreamer (RECEPTOR)
-        pipeline = (
-            "udpsrc port=5000 caps=application/x-rtp,encoding-name=H264,payload=96 ! "
-            "rtph264depay ! "
-            "avdec_h264 ! "
-            "videoconvert ! "
-            "appsink drop=true sync=false max-buffers=1"
+        self.running = True
+
+        print(">>> Lanzando thread de GStreamer…")
+        self.thread = threading.Thread(target=self.video_loop)
+        self.thread.daemon = True
+        self.thread.start()
+
+    def video_loop(self):
+        print(">>> Thread GStreamer iniciado")
+
+        try:
+            import gi
+            gi.require_version("Gst", "1.0")
+            from gi.repository import Gst
+            print(">>> GStreamer importado correctamente")
+        except Exception as e:
+            print(f"!!! ERROR al importar GStreamer: {e}")
+            return
+
+        Gst.init(None)
+        print(">>> GStreamer inicializado")
+
+        pipeline_str = (
+            'udpsrc port=5000 caps="application/x-rtp,encoding-name=H264,payload=96" ! '
+            'rtph264depay ! avdec_h264 ! videoconvert ! '
+            'video/x-raw,format=BGR ! appsink name=appsink0 emit-signals=false '
+            'sync=false max-buffers=1 drop=true'
         )
 
-        # Crear captura
-        self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
-
-        if not self.cap.isOpened():
-            self.get_logger().error("❌ No se pudo abrir el stream")
+        print(">>> Creando pipeline…")
+        try:
+            pipeline = Gst.parse_launch(pipeline_str)
+            print(">>> Pipeline creado OK")
+        except Exception as e:
+            print(f"!!! ERROR creando pipeline: {e}")
             return
 
-        # FPS
-        self.last_time = time.time()
-        self.fps = 0.0
-
-        self.timer = self.create_timer(0.01, self.update)
-
-    def update(self):
-        ret, frame = self.cap.read()
-        if not ret:
+        appsink = pipeline.get_by_name("appsink0")
+        if appsink is None:
+            print("!!! ERROR appsink0 no encontrado")
             return
 
-        # ---- FPS ----
-        now = time.time()
-        dt = now - self.last_time
-        if dt > 0:
-            self.fps = 1.0 / dt
-        self.last_time = now
+        print(">>> Iniciando pipeline PLAYING…")
+        ret = pipeline.set_state(Gst.State.PLAYING)
+        if ret == Gst.StateChangeReturn.FAILURE:
+            print("!!! ERROR al poner pipeline en PLAYING")
+            return
 
-        # ---- Dibujar FPS ----
-        cv2.putText(frame, f"FPS: {self.fps:.1f}", (10, 440),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,255,0), 2)
+        last_time = 0.0
+        print(">>> Loop de recepción iniciado (esperando video)…")
 
-        # Mostrar
-        cv2.imshow("Video RX", frame)
-        cv2.waitKey(1)
+        while self.running:
+            try:
+                sample = appsink.emit("pull-sample")
+            except Exception as e:
+                print(f"!!! ERROR en pull-sample: {e}")
+                continue
 
-        # Publicar ROS2
-        msg = self.bridge.cv2_to_imgmsg(frame, 'bgr8')
-        self.pub.publish(msg)
+            if sample is None:
+                continue
+
+            print(">>> Frame recibido")
+
+            buf = sample.get_buffer()
+            caps = sample.get_caps()
+            s = caps.get_structure(0)
+
+            width = s.get_int("width")[1]
+            height = s.get_int("height")[1]
+
+            data = buf.extract_dup(0, buf.get_size())
+
+            frame = np.frombuffer(data, dtype=np.uint8).reshape((height, width, 3)).copy()
+
+            now = time.time()
+            fps = 1.0 / (now - last_time) if last_time else 0
+            last_time = now
+
+            print(f">>> FPS: {fps:.1f}")
+
+            cv2.imshow("Video RX", frame)
+            cv2.waitKey(1)
+
+        print(">>> Deteniendo pipeline…")
+        pipeline.set_state(Gst.State.NULL)
+        print(">>> Pipeline apagado")
+
+    def destroy_node(self):
+        print(">>> Apagando nodo…")
+        self.running = False
+        self.thread.join(timeout=1)
+        print(">>> Thread terminado")
+        super().destroy_node()
 
 
 def main(args=None):
+    print(">>> Inicializando ROS2…")
     rclpy.init(args=args)
-    node = CameraReceiver()
-    rclpy.spin(node)
+    print(">>> ROS2 INIT OK")
+
+    node = VideoReceiver()
+    print(">>> Nodo VideoReceiver listo")
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+
     node.destroy_node()
+    print(">>> Nodo destruido")
+
     rclpy.shutdown()
+    print(">>> ROS2 apagado")
 
 
 if __name__ == "__main__":

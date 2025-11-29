@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
@@ -12,15 +13,15 @@ class PS4Controller:
         self.RStickX = 0.0
         self.RStickY = 0.0
 
-        # Triggers
+        # Triggers digitales
         self.L2 = 0
         self.R2 = 0
 
         # Botones
-        self.Square = 0
         self.Cross = 0
         self.Circle = 0
         self.Triangle = 0
+        self.Square = 0
         self.L1 = 0
         self.R1 = 0
         self.Share = 0
@@ -36,33 +37,38 @@ class PS4Controller:
         self.RIGHT = 0
 
     def update(self, joy_msg):
-        # Ejes
-        self.LStickX = joy_msg.axes[0]
-        self.LStickY = joy_msg.axes[1]
-        self.RStickX = joy_msg.axes[3]
-        self.RStickY = joy_msg.axes[4]
 
-        # BOTONES
-        self.Square = joy_msg.buttons[0]
-        self.Cross = joy_msg.buttons[1]
-        self.Circle = joy_msg.buttons[2]
-        self.Triangle = joy_msg.buttons[3]
+        # Joysticks con 2 decimales
+        self.LStickX = round(joy_msg.axes[0], 2)
+        self.LStickY = round(joy_msg.axes[1], 2)
+        self.RStickX = round(joy_msg.axes[3], 2)
+        self.RStickY = round(joy_msg.axes[4], 2)
+
+        # Botones (orden correcto)
+        self.Cross    = joy_msg.buttons[0]
+        self.Circle   = joy_msg.buttons[1]
+        self.Triangle = joy_msg.buttons[2]
+        self.Square   = joy_msg.buttons[3]
+        #print("Buttons:", self.Cross, self.Circle, self.Triangle, self.Square)
         self.L1 = joy_msg.buttons[4]
         self.R1 = joy_msg.buttons[5]
-        self.L2 = joy_msg.buttons[6]
+
+        self.L2 = joy_msg.buttons[6]  # digital
         self.R2 = joy_msg.buttons[7]
-        self.Share = joy_msg.buttons[8]
-        self.Options = joy_msg.buttons[9]
+
+        self.Share       = joy_msg.buttons[8]
+        self.Options     = joy_msg.buttons[9]
         self.LStickPress = joy_msg.buttons[10]
         self.RStickPress = joy_msg.buttons[11]
-        self.PS = joy_msg.buttons[12]
+        self.PS          = joy_msg.buttons[12]
 
-        # D-pad
-        self.UP = 1 if joy_msg.axes[7] == 1 else 0
-        self.DOWN = 1 if joy_msg.axes[7] == -1 else 0
-        self.LEFT = 1 if joy_msg.axes[6] == -1 else 0
-        self.RIGHT = 1 if joy_msg.axes[6] == 1 else 0
+        # D-pad / Flechas
+        self.UP    = 1 if joy_msg.axes[7] ==  1 else 0
+        self.DOWN  = 1 if joy_msg.axes[7] == -1 else 0
+        self.LEFT  = 1 if joy_msg.axes[6] == -1 else 0
+        self.RIGHT = 1 if joy_msg.axes[6] ==  1 else 0
 
+ 
 
 class TeleopPS4(Node):
     def __init__(self):
@@ -73,7 +79,7 @@ class TeleopPS4(Node):
 
         self.controller = PS4Controller()
 
-        self.get_logger().info("Nodo PS4 listo (envía TODA la información del control)")
+        self.get_logger().info("✔ Nodo PS4 listo (botones corregidos + 2 decimales)")
 
     def joy_callback(self, msg):
         self.controller.update(msg)
@@ -88,10 +94,11 @@ class TeleopPS4(Node):
             float(self.controller.L2),
             float(self.controller.R2),
 
-            float(self.controller.Square),
             float(self.controller.Cross),
             float(self.controller.Circle),
             float(self.controller.Triangle),
+            float(self.controller.Square),
+
             float(self.controller.L1),
             float(self.controller.R1),
             float(self.controller.Share),
